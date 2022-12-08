@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # check required variables are specified.
+echo "hej"
+echo "$GITHUB_REPO"
 
 if [ -z "$GITHUB_REPO" ]
 then 

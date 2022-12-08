@@ -200,15 +200,33 @@ az keyvault secret set --vault-name "$kv_name" --name "spStorId" --value "$sp_st
 az keyvault secret set --vault-name "$kv_name" --name "spStorPass" --value "$sp_stor_pass"
 az keyvault secret set --vault-name "$kv_name" --name "spStorTenantId" --value "$sp_stor_tenant"
 
+# echo "Generate Databricks token"
+# databricks_host=https://$(echo "$arm_output" | jq -r '.properties.outputs.databricks_output.value.properties.workspaceUrl')
+# databricks_workspace_resource_id=$(echo "$arm_output" | jq -r '.properties.outputs.databricks_id.value')
+# databricks_aad_token=$(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --output json | jq -r .accessToken) # Databricks app global id
+# export DATABRICKS_AAD_TOKEN=$databricks_aad_token
+# databricks configure --host "$databricks_host"  --aad-token
+
 echo "Generate Databricks token"
 databricks_host=https://$(echo "$arm_output" | jq -r '.properties.outputs.databricks_output.value.properties.workspaceUrl')
 databricks_workspace_resource_id=$(echo "$arm_output" | jq -r '.properties.outputs.databricks_id.value')
 databricks_aad_token=$(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --output json | jq -r .accessToken) # Databricks app global id
+export DATABRICKS_AAD_TOKEN=$databricks_aad_token
+databricks configure --host "$databricks_host"  --aad-token
+management_token=$(az account get-access-token --resource https://management.core.windows.net/ --output json | jq -r .accessToken)
+
+curl -X GET \
+-H "Authorization: Bearer $DATABRICKS_AAD_TOKEN" \
+-H "X-Databricks-Azure-SP-Management-Token: $management_token" \
+-H "X-Databricks-Azure-Workspace-Resource-Id: $databricks_workspace_resource_id" \
+$databricks_host/api/2.0/clusters/list
 
 # Use AAD token to generate PAT token
-databricks_token=$(DATABRICKS_TOKEN=$databricks_aad_token \
-    DATABRICKS_HOST=$databricks_host \
-    bash -c "databricks tokens create --comment 'deployment'" | jq -r .token_value)
+databricks_token=$(databricks tokens create --comment 'deployment' | jq -r .token_value)
+
+# databricks_token=$(DATABRICKS_TOKEN=$databricks_aad_token \
+#     DATABRICKS_HOST=$databricks_host \
+#     bash -c "databricks tokens create --comment 'deployment'" | jq -r .token_value)
 
 # Save in KeyVault
 az keyvault secret set --vault-name "$kv_name" --name "databricksDomain" --value "$databricks_host"
